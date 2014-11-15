@@ -14,12 +14,17 @@ import glob
 from tracpy.tracpy_class import Tracpy
 
 
+loc = 'http://barataria.tamu.edu:6060/thredds/dodsC/NcML/txla_nesting6.nc'
+# loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
+grid = tracpy.inout.readgrid(loc, usebasemap=True)
+
 def init(name):
     '''
     Initialization for the simulation.
     '''
 
-    loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
+    loc = 'http://barataria.tamu.edu:6060/thredds/dodsC/NcML/txla_nesting6.nc'
+    # loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
 
     time_units = 'seconds since 1970-01-01'
 
@@ -56,9 +61,9 @@ def init(name):
     # Initialize Tracpy class
     tp = Tracpy(loc, name=name, tseas=tseas, ndays=ndays, nsteps=nsteps, dostream=dostream, savell=False, doperiodic=0, 
                 N=N, ff=ff, ah=ah, av=av, doturb=doturb, do3d=do3d, z0=z0, zpar=zpar, 
-                time_units=time_units, usebasemap=True)
+                time_units=time_units, usebasemap=True, grid=grid)
 
-    tp._readgrid()
+    # tp._readgrid()
 
     # Initial lon/lat locations for drifters
     startptsfile = 'winter-wind-starting-points.npz'
@@ -98,8 +103,8 @@ def run():
     #loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
     #grid = tracpy.inout.readgrid(loc)
 
-    overallstartdate = datetime(2007, 1, 1, 0, 1)
-    overallstopdate = datetime(2007, 3, 1, 0, 1)
+    overallstartdate = datetime(2010, 1, 1, 0, 1)
+    overallstopdate = datetime(2010, 3, 1, 0, 1)
 
     date = overallstartdate
 
