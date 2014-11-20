@@ -11,8 +11,9 @@ import tracpy.plotting
 import matplotlib as mpl
 import pdb
 import op
-from matplotlib import ticker
+from matplotlib import ticker, colors, cm
 from matplotlib.mlab import find
+import os
 
 
 mpl.rcParams.update({'font.size': 14})
@@ -30,18 +31,15 @@ mpl.rcParams['mathtext.fallback_to_cm'] = 'True'
 # plottracks = False # plot drifter trajectories
 # plothist = True # plot drifter locations at a time as a histogram
 
-whichtime = 'seasonal' # 'seasonal' or 'interannual'
+whichtime = 'interannual' # 'seasonal' or 'interannual'
 whichseason = 'winter' # 'winter' or 'summer' for interannual
+howplot = 'log'
 
-# # which drifters to plot for summer and winter, respectively
-# inds = np.load('calcs/summer-drifter-indices.npz')['inds']
-# indw = np.load('calcs/winter-drifter-indices.npz')['inds']
-
-loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
-grid = tracpy.inout.readgrid(loc, usebasemap=True)
-
-# # decimate the drifter indices
-# ddi = 1000
+grid_filename = '/atch/raid1/zhangxq/Projects/txla_nesting6/txla_grd_v4_new.nc'
+vert_filename='/atch/raid1/zhangxq/Projects/txla_nesting6/ocean_his_0001.nc'
+currents_filename = list(np.sort(glob.glob('/atch/raid1/zhangxq/Projects/txla_nesting6/ocean_his_????.nc')))
+if 'grid' not in locals():
+    grid = tracpy.inout.readgrid(grid_filename, vert_filename=vert_filename, usebasemap=True)
 
 if whichtime == 'seasonal':
 
@@ -49,7 +47,9 @@ if whichtime == 'seasonal':
 
     shelf_depth = 100
 
-    S = np.zeros(grid['xpsi'].shape) # initialize
+    fname = 'calcs/' + whichtime + '-S.npz'
+
+    S = np.zeros((2,grid['xpsi'].shape[0],grid['xpsi'].shape[1])) # initialize
 
     fig, axarr = plt.subplots(1,2)
     fig.set_size_inches(13.675, 6.6125)
@@ -67,31 +67,52 @@ if whichtime == 'seasonal':
             ax.set_title('Summer')
             Files = glob.glob('tracks/20??-0[7,8]-*gc.nc')
 
-        for i,File in enumerate(Files):
-            # print File
-            d = netCDF.Dataset(File)
-            # pdb.set_trace()
-            U = d.variables['U'][:]; V = d.variables['V'][:]
-            d.close()
-            Stemp = np.sqrt(op.resize(U, 1)**2 + op.resize(V, 0)**2)
+        if not os.path.exists(fname):
+            for File in Files:
+                # print File
+                d = netCDF.Dataset(File)
+                # pdb.set_trace()
+                U = d.variables['U'][:]; V = d.variables['V'][:]
+                d.close()
+                Stemp = np.sqrt(op.resize(U, 1)**2 + op.resize(V, 0)**2)
+                S[i,:,:] = S[i,:,:] + Stemp
 
-            S = np.nansum( np.vstack((S[np.newaxis,:,:], Stemp[np.newaxis,:,:])), axis=0)
+            # locator = ticker.MaxNLocator(11)
+            # locator.create_dummy_axis()
+            # locator.set_bounds(0, 1) 
+            # levels = locator()
+            # extend = 'max'
+            # H = H/Hmax
+            Smax = 1.
 
-        # locator = ticker.MaxNLocator(11)
-        # locator.create_dummy_axis()
-        # locator.set_bounds(0, 1) 
-        # levels = locator()
-        # extend = 'max'
-        # H = H/Hmax
+        else:
+            d = np.load(fname); S = d['S']; d.close()
+            Smax = S.max()
 
-        mappable = ax.contourf(grid['xpsi'], grid['ypsi'], S, cmap=cmap)#, levels=levels, extend=extend)
-        ax.contour(grid['xr'], grid['yr'], grid['h'], [shelf_depth], colors='0.1', linewidth=3)
-        # pdb.set_trace()
+        if howplot=='log':
+            lev_exp = np.linspace(np.log10(0.00001),np.log10(1.0),100)
+            levs = np.power(10, lev_exp)
+        elif howplot=='linear':
+            levs = np.linspace(0,1,100)
+        mappable = ax.contourf(grid['xpsi'], grid['ypsi'], S[i,:,:]/Smax, cmap=cmap, levels=levs, norm=colors.LogNorm())#, extend=extend)
 
-        # # outline the area where drifters started
-        # d = np.load('calcs/winter-contour-pts.npz')
-        # ax.plot(d['x'], d['y'], 'k', lw=3)
-        # d.close()
+        # Horizontal colorbar below plot
+        cax = fig.add_axes([0.25, 0.075, 0.5, 0.02]) #colorbar axes
+        cb = plt.colorbar(mappable, cax=cax, orientation='horizontal')
+        cb.set_label('Backward transport')
+        levscb = np.hstack((levs[::20],levs[-1]))
+        cb.set_ticks(levscb)
+        cb.set_ticklabels(["%1.4f" % lev for lev in levscb])
+
+        # outline the area where drifters started
+        # if i==0:
+        #     d = np.load('../../shelf_transport/calcs/winter-contour-pts.npz')
+        # elif i==1:
+        d = np.load('../../shelf_transport/calcs/summer-contour-pts.npz')
+        ax.plot(d['x'], d['y'], 'k', lw=2, alpha=0.5)
+        d.close()
+
+    np.savez(fname, S=S, x=grid['xpsi'], y=grid['ypsi'])
 
     fig.savefig('figures/' + whichtime + '.png', bbox_inches='tight')
 
@@ -102,7 +123,9 @@ elif whichtime == 'interannual':
 
     shelf_depth = 100
 
-    S = np.zeros(grid['xpsi'].shape) # initialize
+    fname = 'calcs/' + whichtime + '-' + whichseason + '-S.npz'
+
+    S = np.zeros((7,grid['xpsi'].shape[0],grid['xpsi'].shape[1])) # initialize
 
     fig, axarr = plt.subplots(2,4)
     fig.set_size_inches(13.4, 6.6125)
@@ -129,30 +152,51 @@ elif whichtime == 'interannual':
 
         ax.set_title(str(yr))
 
-        for i,File in enumerate(Files):
-            # print File
-            d = netCDF.Dataset(File)
-            # pdb.set_trace()
-            U = d.variables['U'][:]; V = d.variables['V'][:]
-            d.close()
-            Stemp = np.sqrt(op.resize(U, 1)**2 + op.resize(V, 0)**2)
+        if not os.path.exists(fname):
+            for File in Files:
+                # print File
+                d = netCDF.Dataset(File)
+                # pdb.set_trace()
+                U = d.variables['U'][:]; V = d.variables['V'][:]
+                d.close()
+                Stemp = np.sqrt(op.resize(U, 1)**2 + op.resize(V, 0)**2)
+                S[i,:,:] = S[i,:,:] + Stemp
 
-            S = np.nansum( np.vstack((S[np.newaxis,:,:], Stemp[np.newaxis,:,:])), axis=0)
+            # locator = ticker.MaxNLocator(11)
+            # locator.create_dummy_axis()
+            # locator.set_bounds(0, 1) 
+            # levels = locator()
+            # extend = 'max'
+            # H = H/Hmax
+            Smax = 1.
 
-        # locator = ticker.MaxNLocator(11)
-        # locator.create_dummy_axis()
-        # locator.set_bounds(0, 1) 
-        # levels = locator()
-        # extend = 'max'
-        # H = H/Hmax
+        else:
+            d = np.load(fname); S = d['S']; d.close()
+            Smax = S.max()
 
-        mappable = ax.contourf(grid['xpsi'], grid['ypsi'], S, cmap=cmap)#, levels=levels, extend=extend)
-        ax.contour(grid['xr'], grid['yr'], grid['h'], [shelf_depth], colors='0.1', linewidth=3)
+        if howplot=='log':
+            lev_exp = np.linspace(np.log10(0.00001),np.log10(1.0),100)
+            levs = np.power(10, lev_exp)
+        elif howplot=='linear':
+            levs = np.linspace(0,1,100)
+        mappable = ax.contourf(grid['xpsi'], grid['ypsi'], S[i,:,:]/Smax, cmap=cmap, levels=levs, norm=colors.LogNorm())#, extend=extend)
 
-        # # outline the area where drifters started
-        # d = np.load('calcs/winter-contour-pts.npz')
-        # ax.plot(d['x'], d['y'], 'k', lw=3)
-        # d.close()
+        # Horizontal colorbar below plot
+        cax = fig.add_axes([0.25, 0.075, 0.5, 0.02]) #colorbar axes
+        cb = plt.colorbar(mappable, cax=cax, orientation='horizontal')
+        cb.set_label('Backward transport')
+        levscb = np.hstack((levs[::20],levs[-1]))
+        cb.set_ticks(levscb)
+        cb.set_ticklabels(["%1.4f" % lev for lev in levscb])
+
+        # outline the area where drifters started
+        d = np.load('../../shelf_transport/calcs/summer-contour-pts.npz')
+        ax.plot(d['x'], d['y'], 'k', lw=2, alpha=0.5)
+        d.close()
+
+    np.savez(fname, S=S, x=grid['xpsi'], y=grid['ypsi'])
 
     fig.savefig('figures/' + whichtime + whichseason + '.png', bbox_inches='tight')
+
+
 
