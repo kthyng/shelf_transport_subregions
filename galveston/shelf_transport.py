@@ -12,6 +12,7 @@ import tracpy
 from datetime import datetime, timedelta
 import glob
 from tracpy.tracpy_class import Tracpy
+from matplotlib.mlab import find, Path
 
 
 loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
@@ -64,11 +65,32 @@ def init(name):
     # tp._readgrid()
 
     # Initial lon/lat locations for drifters
-    startptsfile = 'galvestonpts.npz'
-    if not os.path.exists(startptsfile):
+    startindsfile = 'galveston-starting-inds.npz'
+    if not os.path.exists(startindsfile):
         # get starting drifter locations for this region 
         loc_shelftransport = '/home/kthyng/projects/shelf_transport/'
-        inds = np.load(loc_shelftransport + 'calcs/summer-drifter-indices.npz')['inds']
+        dconn = np.load(loc_shelftransport + 'calcs/galvestonpts.npz')
+        lon = dconn['lon']; lat = dconn['lat']
+        xp, yp = grid['basemap'](lon,lat)
+        gpath = Path(np.vstack((xp, yp)).T)
+        dconn.close()
+        drifters = netCDF.Dataset(loc_shelftransport + 'tracks/2004-01-01T00gc.nc')
+        xg = drifters.variables['xg'][:]; yg = drifters.variables['yg'][:]
+        # Change to projected drifter locations now
+        nanind = np.isnan(xg) + (xg==-1) # indices where nans are location in xg, yg; for reinstitution of nans
+        # pdb.set_trace()
+        xp, yp, _ = tracpy.tools.interpolate2d(xg, yg, grid, 'm_ij2xy') 
+        xp[nanind] = np.nan; yp[nanind] = np.nan
+        del(xg,yg) # don't need grid info anymore
+        # save indices of drifters that start in the coastal areas
+        inds = gpath.contains_points(np.vstack((xp[:,0].flat, yp[:,0].flat)).T).reshape(xp[:,0].shape)
+        np.savez(startingindsfile, inds=inds)
+    else:
+        inds = np.load(startindsfile)['inds']
+
+    startptsfile = 'galveston-starting-ll.npz'
+    if not os.path.exists(startptsfile):
+        loc_shelftransport = '/home/kthyng/projects/shelf_transport/'
         drifters = netCDF.Dataset(loc_shelftransport + 'tracks/2004-01-01T00gc.nc')
         xg = drifters.variables['xg'][:]; yg = drifters.variables['yg'][:]
         xg = xg[inds,0]; yg = yg[inds,0]
