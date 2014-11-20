@@ -14,6 +14,9 @@ import glob
 from tracpy.tracpy_class import Tracpy
 
 
+loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
+grid = tracpy.inout.readgrid(loc, usebasemap=True)
+
 def init(name):
     '''
     Initialization for the simulation.
@@ -56,9 +59,9 @@ def init(name):
     # Initialize Tracpy class
     tp = Tracpy(loc, name=name, tseas=tseas, ndays=ndays, nsteps=nsteps, dostream=dostream, savell=False, doperiodic=0, 
                 N=N, ff=ff, ah=ah, av=av, doturb=doturb, do3d=do3d, z0=z0, zpar=zpar, 
-                time_units=time_units, usebasemap=True)
+                time_units=time_units, usebasemap=True, grid=grid)
 
-    tp._readgrid()
+    # tp._readgrid()
 
     # Initial lon/lat locations for drifters
     startptsfile = 'shelf-eddy-starting-points.npz'
@@ -70,6 +73,11 @@ def init(name):
         xg = drifters.variables['xg'][:]; yg = drifters.variables['yg'][:]
         xg = xg[inds,0]; yg = yg[inds,0]
         lon0, lat0, _ = tracpy.tools.interpolate2d(xg, yg, tp.grid, 'm_ij2ll')
+        np.savez(startptsfile, lon0=lon0, lat0=lat0)
+    else:
+        d = np.load(startptsfile)
+        lon0 = d['lon0']; lat0 = d['lat0']
+        d.close()
 
     # equal weightings for drifters for transport.
     T0 = np.ones(lon0.size, order='F')
@@ -93,8 +101,8 @@ def run():
     #loc = 'http://barataria.tamu.edu:8080/thredds/dodsC/NcML/txla_nesting6.nc'
     #grid = tracpy.inout.readgrid(loc)
 
-    overallstartdate = datetime(2005, 1, 1, 0, 1)
-    overallstopdate = datetime(2005, 3, 1, 0, 1)
+    overallstartdate = datetime(2009, 7, 1, 0, 1)
+    overallstopdate = datetime(2009, 9, 1, 0, 1)
 
     date = overallstartdate
 
